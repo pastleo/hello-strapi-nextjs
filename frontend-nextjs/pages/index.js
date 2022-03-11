@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head'
 import Image from 'next/image'
 
-import { timeoutPromise, createAsyncReader } from '../lib/utils';
+import { timeoutPromise, useData } from '../lib/utils';
 
 import styles from '../styles/Home.module.css'
 
@@ -11,38 +11,36 @@ const LazyComp = React.lazy(async () => {
   await timeoutPromise(2000);
   console.log('LazyComp ready');
   return {
-    default: () => (
-      <div>lazy comp</div>
-    ),
+    default: ({ hydrated }) => {
+      useEffect(() => {
+        hydrated.current.add(1);
+      }, [])
+      return <div>lazy comp</div>
+    },
   };
 });
 
-let reader;
-let readerId;
-if (typeof window !== 'undefined') {
-  // preventing client to redo a data-fetching
-  // how to achieve this?
-  reader = () => 2000;
-  readerId = 0;
-}
-function SimpleSuspenseDemo({ id }) {
-  if (readerId !== id) {
-    readerId = id;
-    reader = createAsyncReader(async () => {
-      console.log(`start SimpleSuspenseDemo [${id}]`);
-      const time = 2000;
-      //const time = Math.random() * 3000;
-      await timeoutPromise(time);
-      console.log(`finish SimpleSuspenseDemo [${id}] after ${time}`);
-      return time;
-    });
-  }
+function SimpleSuspenseDemo({ id, hydrated }) {
+  const [reader, dataProps] = useData(id, async () => {
+    console.log(`fetcher starts in SimpleSuspenseDemo [${id}]`);
+    //const time = 2000;
+    const time = Math.floor(Math.random() * 3000);
+    await timeoutPromise(time);
+    console.log(`fetcher finished in SimpleSuspenseDemo [${id}] after ${time}`);
+    return time;
+  });
+  useEffect(() => {
+    hydrated.current.add(2);
+  }, [])
 
-  return <p>SimpleSuspenseDemo [{ id }]: { reader() }</p>
+  return <p {...dataProps}>SimpleSuspenseDemo [{ id }]: { reader() }</p>
 };
 
 export default function Home({ serverPropVal }) {
-
+  const hydrated = useRef(new Set());
+  useEffect(() => {
+    hydrated.current.add(0);
+  }, [])
   const [id, setId] = useState(0);
   return (
     <div className={styles.container}>
@@ -58,12 +56,16 @@ export default function Home({ serverPropVal }) {
         </h1>
         <h4>serverPropVal: { serverPropVal }</h4>
         <h4>id: { id }</h4>
-        <button onClick={() => setId(id + 1)}>id++</button>
+        <button onClick={() => {
+          // we need to wait until all hydration in suspense completed (because streaming SSR):
+          if (hydrated.current.size < 3) return; // really, really bad idea...
+          setId(id + 1);
+        }}>id++</button>
         <React.Suspense fallback={<p>loading LazyComp...</p>}>
-          <LazyComp />
+          <LazyComp hydrated={hydrated} />
         </React.Suspense>
         <React.Suspense fallback={<p>waiting for SimpleSuspenseDemo and data...</p>}>
-          <SimpleSuspenseDemo id={id} />
+          <SimpleSuspenseDemo id={id} hydrated={hydrated} />
         </React.Suspense>
 
         <p className={styles.description}>

@@ -22,3 +22,31 @@ export function createAsyncReader(asyncFn) {
     if (status === 'success') return result;
   }
 }
+
+const dataReaders = new Map();
+if (typeof window !== 'undefined') {
+  window.dataReaders = dataReaders;
+}
+export function useData(key, fetcher) {
+  prepareDataReader(key, fetcher);
+  return [dataReaders.get(key), { [`data-${key}`]: JSON.stringify(dataReaders.get(key)()) }];
+}
+
+function prepareDataReader(key, fetcher) {
+  if (dataReaders.has(key)) return;
+  if (typeof window !== 'undefined') {
+    let value;
+    try {
+      value = JSON.parse((document.querySelector(`[data-${key}]`).dataset)[key]);
+    } catch (_e) {}
+
+    if (typeof value !== 'undefined') {
+      dataReaders.set(key, () => value);
+      return;
+    }
+  }
+  dataReaders.set(
+    key,
+    createAsyncReader(async () => fetcher(key)),
+  );
+}
