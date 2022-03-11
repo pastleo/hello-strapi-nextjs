@@ -1,8 +1,49 @@
+import React, { useState } from 'react';
 import Head from 'next/head'
 import Image from 'next/image'
+
+import { timeoutPromise, createAsyncReader } from '../lib/utils';
+
 import styles from '../styles/Home.module.css'
 
-export default function Home() {
+const LazyComp = React.lazy(async () => {
+  console.log('LazyComp started');
+  await timeoutPromise(2000);
+  console.log('LazyComp ready');
+  return {
+    default: () => (
+      <div>lazy comp</div>
+    ),
+  };
+});
+
+let reader;
+let readerId;
+if (typeof window !== 'undefined') {
+  // preventing client to redo a data-fetching
+  // how to achieve this?
+  reader = () => 2000;
+  readerId = 0;
+}
+function SimpleSuspenseDemo({ id }) {
+  if (readerId !== id) {
+    readerId = id;
+    reader = createAsyncReader(async () => {
+      console.log(`start SimpleSuspenseDemo [${id}]`);
+      const time = 2000;
+      //const time = Math.random() * 3000;
+      await timeoutPromise(time);
+      console.log(`finish SimpleSuspenseDemo [${id}] after ${time}`);
+      return time;
+    });
+  }
+
+  return <p>SimpleSuspenseDemo [{ id }]: { reader() }</p>
+};
+
+export default function Home({ serverPropVal }) {
+
+  const [id, setId] = useState(0);
   return (
     <div className={styles.container}>
       <Head>
@@ -15,6 +56,15 @@ export default function Home() {
         <h1 className={styles.title}>
           Welcome to <a href="https://nextjs.org">Next.js!</a>
         </h1>
+        <h4>serverPropVal: { serverPropVal }</h4>
+        <h4>id: { id }</h4>
+        <button onClick={() => setId(id + 1)}>id++</button>
+        <React.Suspense fallback={<p>loading LazyComp...</p>}>
+          <LazyComp />
+        </React.Suspense>
+        <React.Suspense fallback={<p>waiting for SimpleSuspenseDemo and data...</p>}>
+          <SimpleSuspenseDemo id={id} />
+        </React.Suspense>
 
         <p className={styles.description}>
           Get started by editing{' '}
@@ -66,4 +116,14 @@ export default function Home() {
       </footer>
     </div>
   )
+}
+
+export async function getServerSideProps() {
+  const serverPropVal = Math.floor(Math.random() * 3000);
+  console.log('getServerSideProps', { serverPropVal });
+  return {
+    props: {
+      serverPropVal,
+    }
+  }
 }
