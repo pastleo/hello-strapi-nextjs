@@ -12,10 +12,12 @@ const LazyComp = React.lazy(async () => {
   console.log('LazyComp ready');
   return {
     default: ({ hydrated }) => {
+      const [didMount, setDidMount] = useState(false);
       useEffect(() => {
         hydrated.current.add(1);
+        setDidMount(true);
       }, [])
-      return <div>lazy comp</div>
+      return <div>lazy comp{ didMount && ', didMount/interactive' }</div>
     },
   };
 });
