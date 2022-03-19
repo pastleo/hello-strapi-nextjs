@@ -18,6 +18,12 @@ npm run develop
 npx strapi dev
 ```
 
+#### Setup permission:
+
+![](https://i.imgur.com/vyDD2xB.png)
+
+![](https://i.imgur.com/2VNSnko.png)
+
 ### `start`
 
 Start your Strapi application with autoReload disabled. [Learn more](https://docs.strapi.io/developer-docs/latest/developer-resources/cli/CLI.html#strapi-start)
