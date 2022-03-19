@@ -1,8 +1,14 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Head from 'next/head'
 import Image from 'next/image'
 import styles from '../styles/Home.module.css'
 
 export default function Home() {
+  const [auth, updateAuth] = useLocalState('auth', { token: null });
+  const [authError, receiveError] = useErrorMsg();
+  const emailInput = useRef();
+  const passwordInput = useRef();
+
   return (
     <div className={styles.container}>
       <Head>
@@ -13,43 +19,62 @@ export default function Home() {
 
       <main className={styles.main}>
         <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
+          Hello Strapi & Nextjs
         </h1>
 
         <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
+          { auth.token ? (
+            <>
+              { auth.email }
+              <button onClick={() => {
+                updateAuth({
+                  token: null,
+                });
+              }}>Logout</button>
+            </>
+          ) : (
+            <>
+              <input ref={emailInput} type='text' placeholder='Email' />
+              <input ref={passwordInput} type='password' placeholder='Password' />
+              <button onClick={async () => {
+                const response = await fetchAPI('/api/auth/local', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    identifier: emailInput.current.value,
+                    password: passwordInput.current.value,
+                  })
+                });
+                if (response.error) return receiveError(response.error);
+
+                updateAuth({
+                  email: response.user.email,
+                  token: response.jwt,
+                });
+              }}>Login</button>
+              <button onClick={async () => {
+                const response = await fetchAPI('/api/auth/local/register', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    username: emailInput.current.value,
+                    email: emailInput.current.value,
+                    password: passwordInput.current.value,
+                  })
+                });
+                if (response.error) return receiveError(response.error);
+
+                updateAuth({
+                  email: response.user.email,
+                  token: response.jwt,
+                });
+              }}>Register</button>
+              { authError && <>
+                <br />
+                <span style={{ color: 'red' }}>{ authError }</span>
+              </> }
+            </>
+          ) }
         </p>
 
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h2>Documentation &rarr;</h2>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h2>Learn &rarr;</h2>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/canary/examples"
-            className={styles.card}
-          >
-            <h2>Examples &rarr;</h2>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h2>Deploy &rarr;</h2>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
       </main>
 
       <footer className={styles.footer}>
@@ -66,4 +91,65 @@ export default function Home() {
       </footer>
     </div>
   )
+}
+
+function useLocalState(key, defaultValue) {
+  const [state, setState] = useState(defaultValue);
+  const updateState = useCallback((newState) => {
+    localStorage.setItem(key, JSON.stringify(newState));
+    setState(newState)
+  }, []);
+
+  useEffect(() => {
+    const existingItemJSON = localStorage.getItem(key);
+    if (existingItemJSON === null) return;
+
+    try {
+      setState(JSON.parse(existingItemJSON))
+    } catch (jsonErr) {
+      console.error(jsonErr);
+    }
+  }, []);
+
+  return [state, updateState];
+}
+
+function useErrorMsg() {
+  const [authError, setAuthError] = useState('');
+  const receiveError = useCallback(error => {
+    const errorMessages = [
+      error.message,
+      ...Object.entries(error.details).map(([key, err]) => `${key}: ${err.message}`)
+    ];
+    console.log({ errorMessages });
+    setAuthError(errorMessages.join(', '))
+  }, []);
+
+  return [authError, receiveError];
+}
+
+async function fetchAPI(path, reqOptions = {}) {
+  const { headers, ...options } = reqOptions;
+  const res = await fetch([process.env.API_HOST, path].join(''), {
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers
+    },
+    ...options,
+  });
+  return {
+    ok: res.ok,
+    ...(await res.json()),
+  };
+}
+
+function fetchAuthAPI(path, auth, reqOptions = {}) {
+  const { headers, ...options } = reqOptions;
+  return fetchAPI(path, {
+    headers: {
+      Authorization: `Bearer ${auth.token}`,
+      ...headers
+    },
+    ...options,
+  });
 }
