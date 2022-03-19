@@ -1,10 +1,17 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRef } from 'react';
 import Head from 'next/head'
 import Image from 'next/image'
+
+import Todos from '../components/todos';
+
+import { fetchAPI } from '../utils/api';
+import { useLocalState, useErrorMsg } from '../utils/hooks';
+
 import styles from '../styles/Home.module.css'
 
 export default function Home() {
   const [auth, updateAuth] = useLocalState('auth', { token: null });
+
   const [authError, receiveError] = useErrorMsg();
   const emailInput = useRef();
   const passwordInput = useRef();
@@ -95,133 +102,4 @@ export default function Home() {
       </footer>
     </div>
   )
-}
-
-function Todos({ auth }) {
-  const input = useRef();
-  const [loading, setLoading] = useState(true);
-  const [todos, setTodos] = useState([]);
-
-  const fetchTodos = useCallback(async () => {
-    setLoading(true);
-    const response = await fetchAuthAPI('/api/todos', auth);
-    setTodos(response.data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchTodos();
-  }, []);
-
-  if (loading) return <p>Loading todos...</p>
-
-  return (
-    <ul>
-      <li>
-        <input ref={input} placeholder='New todo' />
-        <button onClick={async () => {
-          setLoading(true);
-          await fetchAuthAPI('/api/todos', auth, {
-            method: 'POST',
-            body: JSON.stringify({
-              data: {
-                content: input.current.value,
-                completed: false,
-              },
-            }),
-          });
-          fetchTodos();
-        }}>
-          Create
-        </button>
-      </li>
-      { todos.map(todo => <li key={todo.id}>
-        <input type='checkbox' checked={todo.attributes.completed} onChange={async event => {
-          setLoading(true);
-          await fetchAuthAPI(`/api/todos/${todo.id}`, auth, {
-            method: 'PUT',
-            body: JSON.stringify({
-              data: {
-                completed: event.target.checked,
-              },
-            }),
-          });
-
-          fetchTodos();
-        }} />
-        { todo.attributes.content }
-        { todo.attributes.completed && <button onClick={async () => {
-          setLoading(true);
-          await fetchAuthAPI(`/api/todos/${todo.id}`, auth, {
-            method: 'DELETE',
-          });
-
-          fetchTodos();
-        }}>
-          🗑️
-        </button> }
-      </li>) }
-    </ul>
-  );
-}
-
-function useLocalState(key, defaultValue) {
-  const [state, setState] = useState(defaultValue);
-  const updateState = useCallback((newState) => {
-    localStorage.setItem(key, JSON.stringify(newState));
-    setState(newState)
-  }, []);
-
-  useEffect(() => {
-    const existingItemJSON = localStorage.getItem(key);
-    if (existingItemJSON === null) return;
-
-    try {
-      setState(JSON.parse(existingItemJSON))
-    } catch (jsonErr) {
-      console.error(jsonErr);
-    }
-  }, []);
-
-  return [state, updateState];
-}
-
-function useErrorMsg() {
-  const [authError, setAuthError] = useState('');
-  const receiveError = useCallback(error => {
-    const errorMessages = [
-      error.message,
-      ...Object.entries(error.details).map(([key, err]) => `${key}: ${err.message}`)
-    ];
-    console.log({ errorMessages });
-    setAuthError(errorMessages.join(', '))
-  }, []);
-
-  return [authError, receiveError];
-}
-
-async function fetchAPI(path, reqOptions = {}) {
-  const { headers, ...options } = reqOptions;
-  const res = await fetch([process.env.API_HOST, path].join(''), {
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers
-    },
-    ...options,
-  });
-  return {
-    ok: res.ok,
-    ...(await res.json()),
-  };
-}
-
-function fetchAuthAPI(path, auth, reqOptions = {}) {
-  const { headers, ...options } = reqOptions;
-  return fetchAPI(path, {
-    headers: {
-      Authorization: `Bearer ${auth.token}`,
-      ...headers
-    },
-    ...options,
-  });
 }
