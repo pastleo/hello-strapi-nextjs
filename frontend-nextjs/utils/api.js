@@ -1,3 +1,5 @@
+import { request as graphqlRequest } from 'graphql-request';
+
 export async function fetchAPI(path, reqOptions = {}) {
   const { headers, ...options } = reqOptions;
   const res = await fetch([process.env.API_HOST, path].join(''), {
@@ -22,4 +24,8 @@ export function fetchAuthAPI(path, auth, reqOptions = {}) {
     },
     ...options,
   });
+}
+
+export function graphqlFetcher(query) {
+  return graphqlRequest(`${process.env.API_HOST}/graphql`, query);
 }

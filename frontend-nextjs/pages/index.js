@@ -1,20 +1,46 @@
-import { useRef } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
+import { SWRConfig } from 'swr';
 import Head from 'next/head'
 import Image from 'next/image'
 
 import Todos from '../components/todos';
+import Announcements from '../components/announcements';
+import { announcementsQuery } from '../utils/queries';
 
-import { fetchAPI } from '../utils/api';
+import { fetchAPI, graphqlFetcher } from '../utils/api';
 import { useLocalState, useErrorMsg } from '../utils/hooks';
 
 import styles from '../styles/Home.module.css'
 
-export default function Home() {
+export async function getServerSideProps() {
+  const announcementsResponse = await graphqlFetcher(announcementsQuery);
+
+  return {
+    props: {
+      swrData: {
+        [announcementsQuery]: announcementsResponse,
+      },
+    },
+  }
+}
+
+export default function Home({ swrData }) {
+  const hydrated = useRef(false);
+  useEffect(() => {
+    hydrated.current = true;
+  }, []);
+
   const [auth, updateAuth] = useLocalState('auth', { token: null });
 
   const [authError, receiveError] = useErrorMsg();
   const emailInput = useRef();
   const passwordInput = useRef();
+
+  const swrOptions = useMemo(() => ({
+    fallback: swrData,
+    fetcher: graphqlFetcher,
+    isPaused: () => !hydrated.current, // prevent first page load of redundant request
+  }), []);
 
   return (
     <div className={styles.container}>
@@ -81,6 +107,10 @@ export default function Home() {
             </>
           ) }
         </p>
+
+        <SWRConfig value={swrOptions}>
+          <Announcements />
+        </SWRConfig>
 
         { auth.token && <>
           <Todos auth={auth} />
